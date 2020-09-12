@@ -11,6 +11,7 @@ import (
 )
 
 func InCoords(c echo.Context, ctx context.Context, coordinates Coordinates) ([]Estate, error) {
+	db := GetRandomDB()
 	estates := []Estate{}
 	b := coordinates.getBoundingBox()
 	err := db.SelectContext(ctx, &estates, `
@@ -29,6 +30,7 @@ func InCoords(c echo.Context, ctx context.Context, coordinates Coordinates) ([]E
 }
 
 func OldInCoords(c echo.Context, ctx context.Context, coordinates Coordinates) ([]Estate, error) {
+	db := GetRandomDB()
 	b := coordinates.getBoundingBox()
 	estatesInBoundingBox := []Estate{}
 	query := `SELECT * FROM estate WHERE latitude <= ? AND latitude >= ? AND longitude <= ? AND longitude >= ? ORDER BY popularity DESC, id ASC`
