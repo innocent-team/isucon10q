@@ -683,6 +683,7 @@ func getLowPricedChair(c echo.Context) error {
 
 func getEstateDetail(c echo.Context) error {
 	ctx := c.Request().Context()
+	db := GetRandomDB()
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		c.Echo().Logger.Infof("Request parameter \"id\" parse error : %v", err)
@@ -690,7 +691,7 @@ func getEstateDetail(c echo.Context) error {
 	}
 
 	var estate Estate
-	err = GetRandomDB().GetContext(ctx, &estate, "SELECT * FROM estate WHERE id = ?", id)
+	err = db.GetContext(ctx, &estate, "SELECT * FROM estate WHERE id = ?", id)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			c.Echo().Logger.Infof("getEstateDetail estate id %v not found", id)
@@ -894,9 +895,10 @@ func searchEstates(c echo.Context) error {
 
 func getLowPricedEstate(c echo.Context) error {
 	ctx := c.Request().Context()
+	db := GetRandomDB()
 	estates := make([]Estate, 0, Limit)
 	query := `SELECT * FROM estate ORDER BY rent ASC, id ASC LIMIT ?`
-	err := GetRandomDB().SelectContext(ctx, &estates, query, Limit)
+	err := db.SelectContext(ctx, &estates, query, Limit)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			c.Logger().Error("getLowPricedEstate not found")
@@ -911,6 +913,7 @@ func getLowPricedEstate(c echo.Context) error {
 
 func searchRecommendedEstateWithChair(c echo.Context) error {
 	ctx := c.Request().Context()
+	db := GetRandomDB()
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		c.Logger().Infof("Invalid format searchRecommendedEstateWithChair id : %v", err)
@@ -919,7 +922,7 @@ func searchRecommendedEstateWithChair(c echo.Context) error {
 
 	chair := Chair{}
 	query := `SELECT * FROM chair WHERE id = ?`
-	err = GetRandomDB().GetContext(ctx, &chair, query, id)
+	err = db.GetContext(ctx, &chair, query, id)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			c.Logger().Infof("Requested chair id \"%v\" not found", id)
@@ -941,7 +944,7 @@ func searchRecommendedEstateWithChair(c echo.Context) error {
 			OR (door_width >= ? AND door_height >= ?)
 		ORDER BY popularity DESC, id ASC LIMIT ?
 	`
-	err = GetRandomDB().SelectContext(ctx, &estates, query, l1, l2, l2, l1, Limit)
+	err = db.SelectContext(ctx, &estates, query, l1, l2, l2, l1, Limit)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return c.JSON(http.StatusOK, EstateListResponse{[]Estate{}})
