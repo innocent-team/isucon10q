@@ -37,6 +37,7 @@ type InitializeResponse struct {
 
 type Chair struct {
 	ID          int64  `db:"id" json:"id"`
+	Count       int64  `db:"count" json:"-"`
 	Name        string `db:"name" json:"name"`
 	Description string `db:"description" json:"description"`
 	Thumbnail   string `db:"thumbnail" json:"thumbnail"`
@@ -529,21 +530,19 @@ func searchChairs(c echo.Context) error {
 		return c.NoContent(http.StatusBadRequest)
 	}
 
-	searchQuery := "SELECT * FROM chair WHERE "
-	countQuery := "SELECT COUNT(*) FROM chair WHERE "
 	searchCondition := strings.Join(conditions, " AND ")
 	limitOffset := " ORDER BY popularity DESC, id ASC LIMIT ? OFFSET ?"
 
 	var res ChairSearchResponse
-	err = db.GetContext(ctx, &res.Count, countQuery+searchCondition, params...)
-	if err != nil {
-		c.Logger().Errorf("searchChairs DB execution error : %v", err)
-		return c.NoContent(http.StatusInternalServerError)
-	}
 
 	chairs := []Chair{}
+	params = append(params, params...)
 	params = append(params, perPage, page*perPage)
-	err = db.SelectContext(ctx, &chairs, searchQuery+searchCondition+limitOffset, params...)
+	entireSearchQuery := `SELECT (
+		SELECT COUNT(*) FROM chair
+		WHERE ` + searchCondition + `
+		) AS count, chair.* FROM chair WHERE ` + searchCondition + limitOffset
+	err = db.SelectContext(ctx, &chairs, entireSearchQuery, params...)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return c.JSON(http.StatusOK, ChairSearchResponse{Count: 0, Chairs: []Chair{}})
@@ -553,6 +552,7 @@ func searchChairs(c echo.Context) error {
 	}
 
 	res.Chairs = chairs
+	res.Count = chairs[0].Count
 
 	return c.JSON(http.StatusOK, res)
 }
