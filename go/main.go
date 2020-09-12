@@ -308,7 +308,7 @@ func main() {
 		if err != nil {
 			e.Logger.Fatalf("DB connection failed : %v", err)
 		}
-		db.SetMaxOpenConns(12)
+		db.SetMaxOpenConns(10)
 		defer db.Close()
 		dbs = append(dbs, db)
 	}
@@ -460,6 +460,9 @@ func postChair(c echo.Context) error {
 func searchChairs(c echo.Context) error {
 	ctx := c.Request().Context()
 	db := GetRandomDB()
+	txn := newrelic.FromContext(ctx)
+	meta := txn.GetTraceMetadata()
+	c.Response().Header().Set("X-NewRelic-Trace-Id", meta.TraceID)
 	conditions := make([]string, 0)
 	params := make([]interface{}, 0)
 
@@ -787,6 +790,9 @@ func postEstate(c echo.Context) error {
 func searchEstates(c echo.Context) error {
 	ctx := c.Request().Context()
 	db := GetRandomDB()
+	txn := newrelic.FromContext(ctx)
+	meta := txn.GetTraceMetadata()
+	c.Response().Header().Set("X-NewRelic-Trace-Id", meta.TraceID)
 	conditions := make([]string, 0)
 	params := make([]interface{}, 0)
 
