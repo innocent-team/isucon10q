@@ -13,11 +13,13 @@ import (
 	"strconv"
 	"strings"
 
-	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo"
 	"github.com/labstack/echo/middleware"
 	"github.com/labstack/gommon/log"
+
+	_ "github.com/newrelic/go-agent/v3/integrations/nrmysql"
+	"github.com/newrelic/go-agent/v3/newrelic"
 )
 
 const Limit = 20
@@ -27,6 +29,7 @@ var db *sqlx.DB
 var mySQLConnectionData *MySQLConnectionEnv
 var chairSearchCondition ChairSearchCondition
 var estateSearchCondition EstateSearchCondition
+var nrApp *newrelic.Application
 
 type InitializeResponse struct {
 	Language string `json:"language"`
@@ -219,7 +222,11 @@ func getEnv(key, defaultValue string) string {
 //ConnectDB isuumoデータベースに接続する
 func (mc *MySQLConnectionEnv) ConnectDB() (*sqlx.DB, error) {
 	dsn := fmt.Sprintf("%v:%v@tcp(%v:%v)/%v", mc.User, mc.Password, mc.Host, mc.Port, mc.DBName)
-	return sqlx.Open("mysql", dsn)
+	db, err := sql.Open("nrmysql", dsn)
+	if err != nil {
+		return nil, err
+	}
+	return sqlx.NewDb(db, "nrmysql"), nil
 }
 
 func init() {
@@ -239,6 +246,18 @@ func init() {
 }
 
 func main() {
+	var err error
+
+	// New Relic
+	nrApp, err = newrelic.NewApplication(
+		newrelic.ConfigAppName("isucon9-2020"),
+		newrelic.ConfigDistributedTracerEnabled(true),
+		newrelic.ConfigLicense(os.Getenv("NEWRELIC_LICENSE_KEY")),
+	)
+	if err != nil {
+		log.Infof("NewRelic app not configured, ignoring: %s", err)
+	}
+
 	// Echo instance
 	e := echo.New()
 	e.Debug = true
@@ -271,7 +290,6 @@ func main() {
 
 	mySQLConnectionData = NewMySQLConnectionEnv()
 
-	var err error
 	db, err = mySQLConnectionData.ConnectDB()
 	if err != nil {
 		e.Logger.Fatalf("DB connection failed : %v", err)
