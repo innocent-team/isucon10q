@@ -295,7 +295,7 @@ func main() {
 	if err != nil {
 		e.Logger.Fatalf("DB connection failed : %v", err)
 	}
-	db.SetMaxOpenConns(20)
+	db.SetMaxOpenConns(15)
 	defer db.Close()
 
 	if os.Getenv("DEV_STATIC_SERVER") != "" {
