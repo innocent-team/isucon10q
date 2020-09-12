@@ -308,7 +308,7 @@ func main() {
 		if err != nil {
 			e.Logger.Fatalf("DB connection failed : %v", err)
 		}
-		db.SetMaxOpenConns(10)
+		db.SetMaxOpenConns(12)
 		defer db.Close()
 		dbs = append(dbs, db)
 	}
@@ -938,7 +938,7 @@ func searchRecommendedEstateWithChair(c echo.Context) error {
 	d := chair.Depth
 	l1, l2 := min64_2(w, h, d)
 	query = `
-		SELECT * FROM estate
+		SELECT * FROM estate FORCE INDEX (estate_door_height)
 		WHERE 
 			(door_width >= ? AND door_height >= ?)
 			OR (door_width >= ? AND door_height >= ?)
