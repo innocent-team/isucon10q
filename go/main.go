@@ -306,6 +306,11 @@ func main() {
 	db.SetMaxOpenConns(10)
 	defer db.Close()
 
+	if os.Getenv("DEV_STATIC_SERVER") != "" {
+		println("Listen local file")
+		e.Static("/", "../data")
+	}
+
 	// Start server
 	serverPort := fmt.Sprintf(":%v", getEnv("SERVER_PORT", "1323"))
 	e.Logger.Fatal(e.Start(serverPort))
