@@ -558,6 +558,7 @@ func searchChairs(c echo.Context) error {
 }
 
 func buyChair(c echo.Context) error {
+	ctx := c.Request().Context()
 	m := echo.Map{}
 	if err := c.Bind(&m); err != nil {
 		c.Echo().Logger.Infof("post buy chair failed : %v", err)
@@ -666,6 +667,7 @@ func getRange(cond RangeCondition, rangeID string) (*Range, error) {
 }
 
 func postEstate(c echo.Context) error {
+	ctx := c.Request().Context()
 	header, err := c.FormFile("estates")
 	if err != nil {
 		c.Logger().Errorf("failed to get form file: %v", err)
