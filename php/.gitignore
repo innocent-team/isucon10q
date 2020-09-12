@@ -1,0 +1,23 @@
+################################################################################
+# PHP
+# from: https://gist.githubusercontent.com/mrclay/3100456/raw/bad04e6bfef738d58134ce4256f3ae9ee22adbbb/.gitignore
+################################################################################
+# ignore IDE/hidden/OS cache files
+.*
+*~
+nbproject
+nb-configuration.xml
+Session.vim
+*.tmproj
+*.tmproject
+tmtags
+Thumbs.db
+Desktop.ini
+
+# ignore Composer downloads
+/vendor/*
+
+# keep some hiddens
+!.htaccess
+!/.gitignore
+!/.travis.yml
