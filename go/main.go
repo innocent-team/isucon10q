@@ -364,6 +364,7 @@ func getChairDetail(c echo.Context) error {
 }
 
 func postChair(c echo.Context) error {
+	ctx := c.Request().Context()
 	header, err := c.FormFile("chairs")
 	if err != nil {
 		c.Logger().Errorf("failed to get form file: %v", err)
@@ -406,7 +407,7 @@ func postChair(c echo.Context) error {
 			c.Logger().Errorf("failed to read record: %v", err)
 			return c.NoContent(http.StatusBadRequest)
 		}
-		_, err := tx.Exec("INSERT INTO chair(id, name, description, thumbnail, price, height, width, depth, color, features, kind, popularity, stock) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)", id, name, description, thumbnail, price, height, width, depth, color, features, kind, popularity, stock)
+		_, err := tx.ExecContext(ctx, "INSERT INTO chair(id, name, description, thumbnail, price, height, width, depth, color, features, kind, popularity, stock) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)", id, name, description, thumbnail, price, height, width, depth, color, features, kind, popularity, stock)
 		if err != nil {
 			c.Logger().Errorf("failed to insert chair: %v", err)
 			return c.NoContent(http.StatusInternalServerError)
@@ -593,7 +594,7 @@ func buyChair(c echo.Context) error {
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
-	_, err = tx.Exec("UPDATE chair SET stock = stock - 1 WHERE id = ?", id)
+	_, err = tx.ExecContext(ctx, "UPDATE chair SET stock = stock - 1 WHERE id = ?", id)
 	if err != nil {
 		c.Echo().Logger.Errorf("chair stock update failed : %v", err)
 		return c.NoContent(http.StatusInternalServerError)
@@ -706,7 +707,7 @@ func postEstate(c echo.Context) error {
 			c.Logger().Errorf("failed to read record: %v", err)
 			return c.NoContent(http.StatusBadRequest)
 		}
-		_, err := tx.Exec("INSERT INTO estate(id, name, description, thumbnail, address, latitude, longitude, rent, door_height, door_width, features, popularity) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", id, name, description, thumbnail, address, latitude, longitude, rent, doorHeight, doorWidth, features, popularity)
+		_, err := tx.ExecContext(ctx, "INSERT INTO estate(id, name, description, thumbnail, address, latitude, longitude, rent, door_height, door_width, features, popularity) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", id, name, description, thumbnail, address, latitude, longitude, rent, doorHeight, doorWidth, features, popularity)
 		if err != nil {
 			c.Logger().Errorf("failed to insert estate: %v", err)
 			return c.NoContent(http.StatusInternalServerError)
