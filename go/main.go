@@ -531,7 +531,10 @@ func searchChairs(c echo.Context) error {
 
 	searchQuery := "SELECT * FROM chair WHERE "
 	countQuery := "SELECT COUNT(*) FROM chair WHERE "
+	txn := newrelic.FromContext(ctx)
+	segment := txn.StartSegment("strings.Join")
 	searchCondition := strings.Join(conditions, " AND ")
+	segment.End()
 	limitOffset := " ORDER BY popularity DESC, id ASC LIMIT ? OFFSET ?"
 
 	var res ChairSearchResponse
@@ -804,7 +807,10 @@ func searchEstates(c echo.Context) error {
 
 	searchQuery := "SELECT * FROM estate WHERE "
 	countQuery := "SELECT COUNT(*) FROM estate WHERE "
+	txn := newrelic.FromContext(ctx)
+	segment := txn.StartSegment("strings.Join")
 	searchCondition := strings.Join(conditions, " AND ")
+	segment.End()
 	limitOffset := " ORDER BY popularity DESC, id ASC LIMIT ? OFFSET ?"
 
 	var res EstateSearchResponse
