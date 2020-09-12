@@ -226,7 +226,7 @@ func NewMySQLConnectionEnvs() []*MySQLConnectionEnv {
 }
 
 func GetRandomDB() *sqlx.DB {
-	idx := (rand.Intn(len(dbs)*2-1) + 1) / 2
+	idx := rand.Intn(len(dbs))
 	return dbs[idx]
 }
 
