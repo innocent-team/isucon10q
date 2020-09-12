@@ -417,7 +417,7 @@ func postChair(c echo.Context) error {
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
-	eg := errgroup.Group{}
+	eg, ctx := errgroup.WithContext(ctx)
 	for _, db := range dbs {
 		eg.Go(func(db *sqlx.DB) func() error {
 			return func() error {
@@ -629,7 +629,7 @@ func buyChair(c echo.Context) error {
 		return c.NoContent(http.StatusBadRequest)
 	}
 
-	eg := errgroup.Group{}
+	eg, ctx := errgroup.WithContext(ctx)
 	for _, db := range dbs {
 		eg.Go(func(db *sqlx.DB) func() error {
 			return func() error {
@@ -752,7 +752,7 @@ func postEstate(c echo.Context) error {
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
-	eg := errgroup.Group{}
+	eg, ctx := errgroup.WithContext(ctx)
 	for _, db := range dbs {
 		eg.Go(func(db *sqlx.DB) func() error {
 			return func() error {
