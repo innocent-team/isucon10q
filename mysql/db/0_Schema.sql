@@ -45,11 +45,13 @@ CREATE INDEX chair_depth_stock ON isuumo.chair (depth, stock);
 CREATE INDEX chair_kind_stock ON isuumo.chair (kind, stock);
 CREATE INDEX chair_color_stock ON isuumo.chair (color, stock);
 CREATE INDEX chair_features_stock ON isuumo.chair (features, stock);
+CREATE INDEX chair_price_id_stock ON isuumo.chair (price, id, stock);
 
 CREATE INDEX estate_door_height ON isuumo.estate (door_height);
 CREATE INDEX estate_door_width ON isuumo.estate (door_width);
 CREATE INDEX estate_rent ON isuumo.estate (rent);
 CREATE INDEX estate_features ON isuumo.estate (features);
+CREATE INDEX estate_rent_id ON isuumo.estate (rent, id);
 
 CREATE INDEX estate_latitude_longitude ON isuumo.estate(latitude, longitude);
 CREATE INDEX estate_door_height_door_width ON isuumo.estate (door_height, door_width);
