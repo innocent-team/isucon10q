@@ -337,7 +337,8 @@ func initialize(c echo.Context) error {
 		filepath.Join(sqlDir, "2_DummyChairData.sql"),
 	}
 
-	eg := errgroup.Group{}
+	ctx := c.Request().Context()
+	eg, ctx := errgroup.WithContext(ctx)
 	for _, mySQLConnectionData := range mySQLConnectionDatas {
 		eg.Go(func(env *MySQLConnectionEnv) func() error {
 			return func() error {
