@@ -104,13 +104,13 @@ max_binlog_size   = 100M
 # ssl-ca=/etc/mysql/cacert.pem
 # ssl-cert=/etc/mysql/server-cert.pem
 # ssl-key=/etc/mysql/server-key.pem
-max_allowed_packet = 32505856
+max_allowed_packet = 325058560
 
 max_connections = 1024
 innodb_buffer_pool_size = 1536M
-innodb_flush_log_at_trx_commit = 0
+# innodb_flush_log_at_trx_commit = 0
 innodb_flush_method=O_DIRECT
-innodb_doublewrite = 0
+# innodb_doublewrite = 0
 
 ## SLOW QUERY ##
 slow_query_log = 1
