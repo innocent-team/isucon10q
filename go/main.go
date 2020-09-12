@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"net/http"
 	"os"
 	"os/exec"
@@ -17,6 +18,7 @@ import (
 	"github.com/labstack/echo"
 	"github.com/labstack/echo/middleware"
 	"github.com/labstack/gommon/log"
+	"golang.org/x/sync/errgroup"
 
 	_ "github.com/newrelic/go-agent/v3/integrations/nrmysql"
 	"github.com/newrelic/go-agent/v3/newrelic"
@@ -25,8 +27,8 @@ import (
 const Limit = 20
 const NazotteLimit = 50
 
-var db *sqlx.DB
-var mySQLConnectionData *MySQLConnectionEnv
+var dbs []*sqlx.DB
+var mySQLConnectionDatas []*MySQLConnectionEnv
 var chairSearchCondition ChairSearchCondition
 var estateSearchCondition EstateSearchCondition
 var nrApp *newrelic.Application
@@ -201,14 +203,31 @@ func (r *RecordMapper) Err() error {
 	return r.err
 }
 
-func NewMySQLConnectionEnv() *MySQLConnectionEnv {
-	return &MySQLConnectionEnv{
-		Host:     getEnv("MYSQL_HOST", "127.0.0.1"),
-		Port:     getEnv("MYSQL_PORT", "3306"),
-		User:     getEnv("MYSQL_USER", "isucon"),
-		DBName:   getEnv("MYSQL_DBNAME", "isuumo"),
-		Password: getEnv("MYSQL_PASS", "isucon"),
+func NewMySQLConnectionEnvs() []*MySQLConnectionEnv {
+	var envs []*MySQLConnectionEnv
+	hosts := strings.Split(getEnv("MYSQL_HOST", "127.0.0.1"), ",")
+	for _, host := range hosts {
+		ip_port := strings.Split(host, ":")
+		port := getEnv("MYSQL_PORT", "3306")
+		if len(ip_port) > 1 {
+			port = ip_port[1]
+		}
+		envs = append(envs,
+			&MySQLConnectionEnv{
+				Host:     ip_port[0],
+				Port:     port,
+				User:     getEnv("MYSQL_USER", "isucon"),
+				DBName:   getEnv("MYSQL_DBNAME", "isuumo"),
+				Password: getEnv("MYSQL_PASS", "isucon"),
+			})
+		println("MySQL", fmt.Sprintf("%v", envs[len(envs)-1]))
 	}
+	return envs
+}
+
+func GetRandomDB() *sqlx.DB {
+	idx := rand.Intn(len(dbs))
+	return dbs[idx]
 }
 
 func getEnv(key, defaultValue string) string {
@@ -289,14 +308,16 @@ func main() {
 	e.GET("/api/estate/search/condition", getEstateSearchCondition, echo.WrapMiddleware(MyWrapHandle("/api/estate/search/condition")))
 	e.GET("/api/recommended_estate/:id", searchRecommendedEstateWithChair, echo.WrapMiddleware(MyWrapHandle("/api/recommended_estate/:id")))
 
-	mySQLConnectionData = NewMySQLConnectionEnv()
-
-	db, err = mySQLConnectionData.ConnectDB()
-	if err != nil {
-		e.Logger.Fatalf("DB connection failed : %v", err)
+	mySQLConnectionDatas = NewMySQLConnectionEnvs()
+	for _, mySQLConnectionData := range mySQLConnectionDatas {
+		var db, err = mySQLConnectionData.ConnectDB()
+		if err != nil {
+			e.Logger.Fatalf("DB connection failed : %v", err)
+		}
+		db.SetMaxOpenConns(10)
+		defer db.Close()
+		dbs = append(dbs, db)
 	}
-	db.SetMaxOpenConns(10)
-	defer db.Close()
 
 	if os.Getenv("DEV_STATIC_SERVER") != "" {
 		println("Listen local file")
@@ -316,20 +337,34 @@ func initialize(c echo.Context) error {
 		filepath.Join(sqlDir, "2_DummyChairData.sql"),
 	}
 
-	for _, p := range paths {
-		sqlFile, _ := filepath.Abs(p)
-		cmdStr := fmt.Sprintf("mysql -h %v -u %v -p%v -P %v %v < %v",
-			mySQLConnectionData.Host,
-			mySQLConnectionData.User,
-			mySQLConnectionData.Password,
-			mySQLConnectionData.Port,
-			mySQLConnectionData.DBName,
-			sqlFile,
-		)
-		if err := exec.Command("bash", "-c", cmdStr).Run(); err != nil {
-			c.Logger().Errorf("Initialize script error : %v", err)
-			return c.NoContent(http.StatusInternalServerError)
-		}
+	ctx := c.Request().Context()
+	eg, ctx := errgroup.WithContext(ctx)
+	for _, mySQLConnectionData := range mySQLConnectionDatas {
+		eg.Go(func(env *MySQLConnectionEnv) func() error {
+			return func() error {
+				for _, p := range paths {
+					sqlFile, _ := filepath.Abs(p)
+					cmdStr := fmt.Sprintf("mysql -h %v -u %v -p%v -P %v %v < %v",
+						env.Host,
+						env.User,
+						env.Password,
+						env.Port,
+						env.DBName,
+						sqlFile,
+					)
+					println(cmdStr)
+					if err := exec.Command("bash", "-c", cmdStr).Run(); err != nil {
+						c.Logger().Errorf("Initialize script error : %v", err)
+						return c.NoContent(http.StatusInternalServerError)
+					}
+				}
+				return nil
+			}
+		}(mySQLConnectionData))
+	}
+
+	if err := eg.Wait(); err != nil {
+		return err
 	}
 
 	return c.JSON(http.StatusOK, InitializeResponse{
@@ -339,6 +374,7 @@ func initialize(c echo.Context) error {
 
 func getChairDetail(c echo.Context) error {
 	ctx := c.Request().Context()
+	db := GetRandomDB()
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		c.Echo().Logger.Errorf("Request parameter \"id\" parse error : %v", err)
@@ -382,46 +418,60 @@ func postChair(c echo.Context) error {
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
-	tx, err := db.Begin()
-	if err != nil {
-		c.Logger().Errorf("failed to begin tx: %v", err)
-		return c.NoContent(http.StatusInternalServerError)
+	eg, ctx := errgroup.WithContext(ctx)
+	for _, db := range dbs {
+		eg.Go(func(db *sqlx.DB) func() error {
+			return func() error {
+				tx, err := db.Begin()
+				if err != nil {
+					c.Logger().Errorf("failed to begin tx: %v", err)
+					return c.NoContent(http.StatusInternalServerError)
+				}
+				defer tx.Rollback()
+				for _, row := range records {
+					rm := RecordMapper{Record: row}
+					id := rm.NextInt()
+					name := rm.NextString()
+					description := rm.NextString()
+					thumbnail := rm.NextString()
+					price := rm.NextInt()
+					height := rm.NextInt()
+					width := rm.NextInt()
+					depth := rm.NextInt()
+					color := rm.NextString()
+					features := rm.NextString()
+					kind := rm.NextString()
+					popularity := rm.NextInt()
+					stock := rm.NextInt()
+					if err := rm.Err(); err != nil {
+						c.Logger().Errorf("failed to read record: %v", err)
+						return c.NoContent(http.StatusBadRequest)
+					}
+					_, err := tx.ExecContext(ctx, "INSERT INTO chair(id, name, description, thumbnail, price, height, width, depth, color, features, kind, popularity, stock) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)", id, name, description, thumbnail, price, height, width, depth, color, features, kind, popularity, stock)
+					if err != nil {
+						c.Logger().Errorf("failed to insert chair: %v", err)
+						return c.NoContent(http.StatusInternalServerError)
+					}
+				}
+				if err := tx.Commit(); err != nil {
+					c.Logger().Errorf("failed to commit tx: %v", err)
+					return c.NoContent(http.StatusInternalServerError)
+				}
+				return nil
+			}
+		}(db))
 	}
-	defer tx.Rollback()
-	for _, row := range records {
-		rm := RecordMapper{Record: row}
-		id := rm.NextInt()
-		name := rm.NextString()
-		description := rm.NextString()
-		thumbnail := rm.NextString()
-		price := rm.NextInt()
-		height := rm.NextInt()
-		width := rm.NextInt()
-		depth := rm.NextInt()
-		color := rm.NextString()
-		features := rm.NextString()
-		kind := rm.NextString()
-		popularity := rm.NextInt()
-		stock := rm.NextInt()
-		if err := rm.Err(); err != nil {
-			c.Logger().Errorf("failed to read record: %v", err)
-			return c.NoContent(http.StatusBadRequest)
-		}
-		_, err := tx.ExecContext(ctx, "INSERT INTO chair(id, name, description, thumbnail, price, height, width, depth, color, features, kind, popularity, stock) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)", id, name, description, thumbnail, price, height, width, depth, color, features, kind, popularity, stock)
-		if err != nil {
-			c.Logger().Errorf("failed to insert chair: %v", err)
-			return c.NoContent(http.StatusInternalServerError)
-		}
+
+	if err := eg.Wait(); err != nil {
+		return err
 	}
-	if err := tx.Commit(); err != nil {
-		c.Logger().Errorf("failed to commit tx: %v", err)
-		return c.NoContent(http.StatusInternalServerError)
-	}
+
 	return c.NoContent(http.StatusCreated)
 }
 
 func searchChairs(c echo.Context) error {
 	ctx := c.Request().Context()
+	db := GetRandomDB()
 	txn := newrelic.FromContext(ctx)
 	meta := txn.GetTraceMetadata()
 	c.Response().Header().Set("X-NewRelic-Trace-Id", meta.TraceID)
@@ -580,34 +630,47 @@ func buyChair(c echo.Context) error {
 		return c.NoContent(http.StatusBadRequest)
 	}
 
-	tx, err := db.Beginx()
-	if err != nil {
-		c.Echo().Logger.Errorf("failed to create transaction : %v", err)
-		return c.NoContent(http.StatusInternalServerError)
-	}
-	defer tx.Rollback()
+	eg, ctx := errgroup.WithContext(ctx)
+	for _, db := range dbs {
+		eg.Go(func(db *sqlx.DB) func() error {
+			return func() error {
+				tx, err := db.Beginx()
+				if err != nil {
+					c.Echo().Logger.Errorf("failed to create transaction : %v", err)
+					return c.NoContent(http.StatusInternalServerError)
+				}
+				defer tx.Rollback()
 
-	var chair Chair
-	err = tx.QueryRowxContext(ctx, "SELECT * FROM chair WHERE id = ? AND stock > 0 FOR UPDATE", id).StructScan(&chair)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			c.Echo().Logger.Infof("buyChair chair id \"%v\" not found", id)
-			return c.NoContent(http.StatusNotFound)
-		}
-		c.Echo().Logger.Errorf("DB Execution Error: on getting a chair by id : %v", err)
-		return c.NoContent(http.StatusInternalServerError)
+				var chair Chair
+				err = tx.QueryRowxContext(ctx, "SELECT * FROM chair WHERE id = ? AND stock > 0 FOR UPDATE", id).StructScan(&chair)
+				if err != nil {
+					if err == sql.ErrNoRows {
+						c.Echo().Logger.Infof("buyChair chair id \"%v\" not found", id)
+						return c.NoContent(http.StatusNotFound)
+					}
+					c.Echo().Logger.Errorf("DB Execution Error: on getting a chair by id : %v", err)
+					return c.NoContent(http.StatusInternalServerError)
+				}
+
+				_, err = tx.ExecContext(ctx, "UPDATE chair SET stock = stock - 1 WHERE id = ?", id)
+				if err != nil {
+					c.Echo().Logger.Errorf("chair stock update failed : %v", err)
+					return c.NoContent(http.StatusInternalServerError)
+				}
+
+				err = tx.Commit()
+				if err != nil {
+					c.Echo().Logger.Errorf("transaction commit error : %v", err)
+					return c.NoContent(http.StatusInternalServerError)
+				}
+
+				return nil
+			}
+		}(db))
 	}
 
-	_, err = tx.ExecContext(ctx, "UPDATE chair SET stock = stock - 1 WHERE id = ?", id)
-	if err != nil {
-		c.Echo().Logger.Errorf("chair stock update failed : %v", err)
-		return c.NoContent(http.StatusInternalServerError)
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		c.Echo().Logger.Errorf("transaction commit error : %v", err)
-		return c.NoContent(http.StatusInternalServerError)
+	if err := eg.Wait(); err != nil {
+		return err
 	}
 
 	return c.NoContent(http.StatusOK)
@@ -619,6 +682,7 @@ func getChairSearchCondition(c echo.Context) error {
 
 func getLowPricedChair(c echo.Context) error {
 	ctx := c.Request().Context()
+	db := GetRandomDB()
 	var chairs []Chair
 	query := `SELECT * FROM chair WHERE stock > 0 ORDER BY price ASC, id ASC LIMIT ?`
 	err := db.SelectContext(ctx, &chairs, query, Limit)
@@ -636,6 +700,7 @@ func getLowPricedChair(c echo.Context) error {
 
 func getEstateDetail(c echo.Context) error {
 	ctx := c.Request().Context()
+	db := GetRandomDB()
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		c.Echo().Logger.Infof("Request parameter \"id\" parse error : %v", err)
@@ -688,45 +753,59 @@ func postEstate(c echo.Context) error {
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
-	tx, err := db.Begin()
-	if err != nil {
-		c.Logger().Errorf("failed to begin tx: %v", err)
-		return c.NoContent(http.StatusInternalServerError)
+	eg, ctx := errgroup.WithContext(ctx)
+	for _, db := range dbs {
+		eg.Go(func(db *sqlx.DB) func() error {
+			return func() error {
+				tx, err := db.Begin()
+				if err != nil {
+					c.Logger().Errorf("failed to begin tx: %v", err)
+					return c.NoContent(http.StatusInternalServerError)
+				}
+				defer tx.Rollback()
+				for _, row := range records {
+					rm := RecordMapper{Record: row}
+					id := rm.NextInt()
+					name := rm.NextString()
+					description := rm.NextString()
+					thumbnail := rm.NextString()
+					address := rm.NextString()
+					latitude := rm.NextFloat()
+					longitude := rm.NextFloat()
+					rent := rm.NextInt()
+					doorHeight := rm.NextInt()
+					doorWidth := rm.NextInt()
+					features := rm.NextString()
+					popularity := rm.NextInt()
+					if err := rm.Err(); err != nil {
+						c.Logger().Errorf("failed to read record: %v", err)
+						return c.NoContent(http.StatusBadRequest)
+					}
+					_, err := tx.ExecContext(ctx, "INSERT INTO estate(id, name, description, thumbnail, address, latitude, longitude, rent, door_height, door_width, features, popularity) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", id, name, description, thumbnail, address, latitude, longitude, rent, doorHeight, doorWidth, features, popularity)
+					if err != nil {
+						c.Logger().Errorf("failed to insert estate: %v", err)
+						return c.NoContent(http.StatusInternalServerError)
+					}
+				}
+				if err := tx.Commit(); err != nil {
+					c.Logger().Errorf("failed to commit tx: %v", err)
+					return c.NoContent(http.StatusInternalServerError)
+				}
+				return nil
+			}
+		}(db))
 	}
-	defer tx.Rollback()
-	for _, row := range records {
-		rm := RecordMapper{Record: row}
-		id := rm.NextInt()
-		name := rm.NextString()
-		description := rm.NextString()
-		thumbnail := rm.NextString()
-		address := rm.NextString()
-		latitude := rm.NextFloat()
-		longitude := rm.NextFloat()
-		rent := rm.NextInt()
-		doorHeight := rm.NextInt()
-		doorWidth := rm.NextInt()
-		features := rm.NextString()
-		popularity := rm.NextInt()
-		if err := rm.Err(); err != nil {
-			c.Logger().Errorf("failed to read record: %v", err)
-			return c.NoContent(http.StatusBadRequest)
-		}
-		_, err := tx.ExecContext(ctx, "INSERT INTO estate(id, name, description, thumbnail, address, latitude, longitude, rent, door_height, door_width, features, popularity) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", id, name, description, thumbnail, address, latitude, longitude, rent, doorHeight, doorWidth, features, popularity)
-		if err != nil {
-			c.Logger().Errorf("failed to insert estate: %v", err)
-			return c.NoContent(http.StatusInternalServerError)
-		}
+
+	if err := eg.Wait(); err != nil {
+		return err
 	}
-	if err := tx.Commit(); err != nil {
-		c.Logger().Errorf("failed to commit tx: %v", err)
-		return c.NoContent(http.StatusInternalServerError)
-	}
+
 	return c.NoContent(http.StatusCreated)
 }
 
 func searchEstates(c echo.Context) error {
 	ctx := c.Request().Context()
+	db := GetRandomDB()
 	txn := newrelic.FromContext(ctx)
 	meta := txn.GetTraceMetadata()
 	c.Response().Header().Set("X-NewRelic-Trace-Id", meta.TraceID)
@@ -838,6 +917,7 @@ func searchEstates(c echo.Context) error {
 
 func getLowPricedEstate(c echo.Context) error {
 	ctx := c.Request().Context()
+	db := GetRandomDB()
 	estates := make([]Estate, 0, Limit)
 	query := `SELECT * FROM estate ORDER BY rent ASC, id ASC LIMIT ?`
 	err := db.SelectContext(ctx, &estates, query, Limit)
@@ -855,6 +935,7 @@ func getLowPricedEstate(c echo.Context) error {
 
 func searchRecommendedEstateWithChair(c echo.Context) error {
 	ctx := c.Request().Context()
+	db := GetRandomDB()
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		c.Logger().Infof("Invalid format searchRecommendedEstateWithChair id : %v", err)
@@ -922,6 +1003,7 @@ func searchEstateNazotte(c echo.Context) error {
 }
 
 func postEstateRequestDocument(c echo.Context) error {
+	db := GetRandomDB()
 	ctx := c.Request().Context()
 	m := echo.Map{}
 	if err := c.Bind(&m); err != nil {
