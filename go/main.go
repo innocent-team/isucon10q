@@ -12,11 +12,13 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo"
 	"github.com/labstack/echo/middleware"
 	"github.com/labstack/gommon/log"
+	"github.com/pkg/profile"
 
 	_ "github.com/newrelic/go-agent/v3/integrations/nrmysql"
 	"github.com/newrelic/go-agent/v3/newrelic"
@@ -246,6 +248,9 @@ func init() {
 }
 
 func main() {
+	profilePath := fmt.Sprintf("./profile/%s/", time.Now().Format("20060102150405"))
+	defer profile.Start(profile.ProfilePath(profilePath)).Stop()
+
 	var err error
 
 	// New Relic
