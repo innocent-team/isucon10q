@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -249,8 +250,26 @@ func init() {
 
 func main() {
 	profilePath := fmt.Sprintf("./profile/%s/", time.Now().Format("20060102150405"))
-	defer profile.Start(profile.ProfilePath(profilePath)).Stop()
+	defer profile.Start(
+		profile.ProfilePath(profilePath),
+		profile.NoShutdownHook).Stop()
 
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	done := make(chan interface{})
+
+	go func() {
+		server()
+		done <- nil
+	}()
+
+	select {
+	case <-done:
+	case <-c:
+	}
+}
+
+func server() {
 	var err error
 
 	// New Relic
