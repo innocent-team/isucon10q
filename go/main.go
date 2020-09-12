@@ -274,6 +274,7 @@ func main() {
 			log.Fatal(err)
 		}
 		e.Use(relic.Transaction)
+		e.Use(AddNewRelicContextMiddleware)
 	}
 
 	// Initialize
