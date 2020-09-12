@@ -207,14 +207,20 @@ func NewMySQLConnectionEnvs() []*MySQLConnectionEnv {
 	var envs []*MySQLConnectionEnv
 	hosts := strings.Split(getEnv("MYSQL_HOST", "127.0.0.1"), ",")
 	for _, host := range hosts {
+		ip_port := strings.Split(host, ":")
+		port := getEnv("MYSQL_PORT", "3306")
+		if len(ip_port) > 1 {
+			port = ip_port[1]
+		}
 		envs = append(envs,
 			&MySQLConnectionEnv{
-				Host:     host,
-				Port:     getEnv("MYSQL_PORT", "3306"),
+				Host:     ip_port[0],
+				Port:     port,
 				User:     getEnv("MYSQL_USER", "isucon"),
 				DBName:   getEnv("MYSQL_DBNAME", "isuumo"),
 				Password: getEnv("MYSQL_PASS", "isucon"),
 			})
+		println("MySQL", fmt.Sprintf("%v", envs[len(envs)-1]))
 	}
 	return envs
 }
@@ -333,24 +339,27 @@ func initialize(c echo.Context) error {
 
 	eg := errgroup.Group{}
 	for _, mySQLConnectionData := range mySQLConnectionDatas {
-		eg.Go(func() error {
-			for _, p := range paths {
-				sqlFile, _ := filepath.Abs(p)
-				cmdStr := fmt.Sprintf("mysql -h %v -u %v -p%v -P %v %v < %v",
-					mySQLConnectionData.Host,
-					mySQLConnectionData.User,
-					mySQLConnectionData.Password,
-					mySQLConnectionData.Port,
-					mySQLConnectionData.DBName,
-					sqlFile,
-				)
-				if err := exec.Command("bash", "-c", cmdStr).Run(); err != nil {
-					c.Logger().Errorf("Initialize script error : %v", err)
-					return c.NoContent(http.StatusInternalServerError)
+		eg.Go(func(env *MySQLConnectionEnv) func() error {
+			return func() error {
+				for _, p := range paths {
+					sqlFile, _ := filepath.Abs(p)
+					cmdStr := fmt.Sprintf("mysql -h %v -u %v -p%v -P %v %v < %v",
+						env.Host,
+						env.User,
+						env.Password,
+						env.Port,
+						env.DBName,
+						sqlFile,
+					)
+					println(cmdStr)
+					if err := exec.Command("bash", "-c", cmdStr).Run(); err != nil {
+						c.Logger().Errorf("Initialize script error : %v", err)
+						return c.NoContent(http.StatusInternalServerError)
+					}
 				}
+				return nil
 			}
-			return nil
-		})
+		}(mySQLConnectionData))
 	}
 
 	if err := eg.Wait(); err != nil {
@@ -410,44 +419,46 @@ func postChair(c echo.Context) error {
 
 	eg := errgroup.Group{}
 	for _, db := range dbs {
-		eg.Go(func() error {
-			tx, err := db.Begin()
-			if err != nil {
-				c.Logger().Errorf("failed to begin tx: %v", err)
-				return c.NoContent(http.StatusInternalServerError)
-			}
-			defer tx.Rollback()
-			for _, row := range records {
-				rm := RecordMapper{Record: row}
-				id := rm.NextInt()
-				name := rm.NextString()
-				description := rm.NextString()
-				thumbnail := rm.NextString()
-				price := rm.NextInt()
-				height := rm.NextInt()
-				width := rm.NextInt()
-				depth := rm.NextInt()
-				color := rm.NextString()
-				features := rm.NextString()
-				kind := rm.NextString()
-				popularity := rm.NextInt()
-				stock := rm.NextInt()
-				if err := rm.Err(); err != nil {
-					c.Logger().Errorf("failed to read record: %v", err)
-					return c.NoContent(http.StatusBadRequest)
-				}
-				_, err := tx.ExecContext(ctx, "INSERT INTO chair(id, name, description, thumbnail, price, height, width, depth, color, features, kind, popularity, stock) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)", id, name, description, thumbnail, price, height, width, depth, color, features, kind, popularity, stock)
+		eg.Go(func(db *sqlx.DB) func() error {
+			return func() error {
+				tx, err := db.Begin()
 				if err != nil {
-					c.Logger().Errorf("failed to insert chair: %v", err)
+					c.Logger().Errorf("failed to begin tx: %v", err)
 					return c.NoContent(http.StatusInternalServerError)
 				}
+				defer tx.Rollback()
+				for _, row := range records {
+					rm := RecordMapper{Record: row}
+					id := rm.NextInt()
+					name := rm.NextString()
+					description := rm.NextString()
+					thumbnail := rm.NextString()
+					price := rm.NextInt()
+					height := rm.NextInt()
+					width := rm.NextInt()
+					depth := rm.NextInt()
+					color := rm.NextString()
+					features := rm.NextString()
+					kind := rm.NextString()
+					popularity := rm.NextInt()
+					stock := rm.NextInt()
+					if err := rm.Err(); err != nil {
+						c.Logger().Errorf("failed to read record: %v", err)
+						return c.NoContent(http.StatusBadRequest)
+					}
+					_, err := tx.ExecContext(ctx, "INSERT INTO chair(id, name, description, thumbnail, price, height, width, depth, color, features, kind, popularity, stock) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)", id, name, description, thumbnail, price, height, width, depth, color, features, kind, popularity, stock)
+					if err != nil {
+						c.Logger().Errorf("failed to insert chair: %v", err)
+						return c.NoContent(http.StatusInternalServerError)
+					}
+				}
+				if err := tx.Commit(); err != nil {
+					c.Logger().Errorf("failed to commit tx: %v", err)
+					return c.NoContent(http.StatusInternalServerError)
+				}
+				return nil
 			}
-			if err := tx.Commit(); err != nil {
-				c.Logger().Errorf("failed to commit tx: %v", err)
-				return c.NoContent(http.StatusInternalServerError)
-			}
-			return nil
-		})
+		}(db))
 	}
 
 	if err := eg.Wait(); err != nil {
@@ -620,39 +631,41 @@ func buyChair(c echo.Context) error {
 
 	eg := errgroup.Group{}
 	for _, db := range dbs {
-		eg.Go(func() error {
-			tx, err := db.Beginx()
-			if err != nil {
-				c.Echo().Logger.Errorf("failed to create transaction : %v", err)
-				return c.NoContent(http.StatusInternalServerError)
-			}
-			defer tx.Rollback()
-
-			var chair Chair
-			err = tx.QueryRowxContext(ctx, "SELECT * FROM chair WHERE id = ? AND stock > 0 FOR UPDATE", id).StructScan(&chair)
-			if err != nil {
-				if err == sql.ErrNoRows {
-					c.Echo().Logger.Infof("buyChair chair id \"%v\" not found", id)
-					return c.NoContent(http.StatusNotFound)
+		eg.Go(func(db *sqlx.DB) func() error {
+			return func() error {
+				tx, err := db.Beginx()
+				if err != nil {
+					c.Echo().Logger.Errorf("failed to create transaction : %v", err)
+					return c.NoContent(http.StatusInternalServerError)
 				}
-				c.Echo().Logger.Errorf("DB Execution Error: on getting a chair by id : %v", err)
-				return c.NoContent(http.StatusInternalServerError)
-			}
+				defer tx.Rollback()
 
-			_, err = tx.ExecContext(ctx, "UPDATE chair SET stock = stock - 1 WHERE id = ?", id)
-			if err != nil {
-				c.Echo().Logger.Errorf("chair stock update failed : %v", err)
-				return c.NoContent(http.StatusInternalServerError)
-			}
+				var chair Chair
+				err = tx.QueryRowxContext(ctx, "SELECT * FROM chair WHERE id = ? AND stock > 0 FOR UPDATE", id).StructScan(&chair)
+				if err != nil {
+					if err == sql.ErrNoRows {
+						c.Echo().Logger.Infof("buyChair chair id \"%v\" not found", id)
+						return c.NoContent(http.StatusNotFound)
+					}
+					c.Echo().Logger.Errorf("DB Execution Error: on getting a chair by id : %v", err)
+					return c.NoContent(http.StatusInternalServerError)
+				}
 
-			err = tx.Commit()
-			if err != nil {
-				c.Echo().Logger.Errorf("transaction commit error : %v", err)
-				return c.NoContent(http.StatusInternalServerError)
-			}
+				_, err = tx.ExecContext(ctx, "UPDATE chair SET stock = stock - 1 WHERE id = ?", id)
+				if err != nil {
+					c.Echo().Logger.Errorf("chair stock update failed : %v", err)
+					return c.NoContent(http.StatusInternalServerError)
+				}
 
-			return nil
-		})
+				err = tx.Commit()
+				if err != nil {
+					c.Echo().Logger.Errorf("transaction commit error : %v", err)
+					return c.NoContent(http.StatusInternalServerError)
+				}
+
+				return nil
+			}
+		}(db))
 	}
 
 	if err := eg.Wait(); err != nil {
@@ -741,43 +754,45 @@ func postEstate(c echo.Context) error {
 
 	eg := errgroup.Group{}
 	for _, db := range dbs {
-		eg.Go(func() error {
-			tx, err := db.Begin()
-			if err != nil {
-				c.Logger().Errorf("failed to begin tx: %v", err)
-				return c.NoContent(http.StatusInternalServerError)
-			}
-			defer tx.Rollback()
-			for _, row := range records {
-				rm := RecordMapper{Record: row}
-				id := rm.NextInt()
-				name := rm.NextString()
-				description := rm.NextString()
-				thumbnail := rm.NextString()
-				address := rm.NextString()
-				latitude := rm.NextFloat()
-				longitude := rm.NextFloat()
-				rent := rm.NextInt()
-				doorHeight := rm.NextInt()
-				doorWidth := rm.NextInt()
-				features := rm.NextString()
-				popularity := rm.NextInt()
-				if err := rm.Err(); err != nil {
-					c.Logger().Errorf("failed to read record: %v", err)
-					return c.NoContent(http.StatusBadRequest)
-				}
-				_, err := tx.ExecContext(ctx, "INSERT INTO estate(id, name, description, thumbnail, address, latitude, longitude, rent, door_height, door_width, features, popularity) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", id, name, description, thumbnail, address, latitude, longitude, rent, doorHeight, doorWidth, features, popularity)
+		eg.Go(func(db *sqlx.DB) func() error {
+			return func() error {
+				tx, err := db.Begin()
 				if err != nil {
-					c.Logger().Errorf("failed to insert estate: %v", err)
+					c.Logger().Errorf("failed to begin tx: %v", err)
 					return c.NoContent(http.StatusInternalServerError)
 				}
+				defer tx.Rollback()
+				for _, row := range records {
+					rm := RecordMapper{Record: row}
+					id := rm.NextInt()
+					name := rm.NextString()
+					description := rm.NextString()
+					thumbnail := rm.NextString()
+					address := rm.NextString()
+					latitude := rm.NextFloat()
+					longitude := rm.NextFloat()
+					rent := rm.NextInt()
+					doorHeight := rm.NextInt()
+					doorWidth := rm.NextInt()
+					features := rm.NextString()
+					popularity := rm.NextInt()
+					if err := rm.Err(); err != nil {
+						c.Logger().Errorf("failed to read record: %v", err)
+						return c.NoContent(http.StatusBadRequest)
+					}
+					_, err := tx.ExecContext(ctx, "INSERT INTO estate(id, name, description, thumbnail, address, latitude, longitude, rent, door_height, door_width, features, popularity) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", id, name, description, thumbnail, address, latitude, longitude, rent, doorHeight, doorWidth, features, popularity)
+					if err != nil {
+						c.Logger().Errorf("failed to insert estate: %v", err)
+						return c.NoContent(http.StatusInternalServerError)
+					}
+				}
+				if err := tx.Commit(); err != nil {
+					c.Logger().Errorf("failed to commit tx: %v", err)
+					return c.NoContent(http.StatusInternalServerError)
+				}
+				return nil
 			}
-			if err := tx.Commit(); err != nil {
-				c.Logger().Errorf("failed to commit tx: %v", err)
-				return c.NoContent(http.StatusInternalServerError)
-			}
-			return nil
-		})
+		}(db))
 	}
 
 	if err := eg.Wait(); err != nil {
