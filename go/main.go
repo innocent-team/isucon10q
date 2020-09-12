@@ -18,6 +18,7 @@ import (
 	"github.com/labstack/echo/middleware"
 	"github.com/labstack/gommon/log"
 
+	echorelic "github.com/jessie-codes/echo-relic/v3"
 	_ "github.com/newrelic/go-agent/v3/integrations/nrmysql"
 	"github.com/newrelic/go-agent/v3/newrelic"
 )
@@ -249,10 +250,11 @@ func main() {
 	var err error
 
 	// New Relic
+	nrLicenseKey := os.Getenv("NEWRELIC_LICENSE_KEY")
 	nrApp, err = newrelic.NewApplication(
-		newrelic.ConfigAppName("isucon9-2020"),
+		newrelic.ConfigAppName("isucon10"),
 		newrelic.ConfigDistributedTracerEnabled(true),
-		newrelic.ConfigLicense(os.Getenv("NEWRELIC_LICENSE_KEY")),
+		newrelic.ConfigLicense(nrLicenseKey),
 	)
 	if err != nil {
 		log.Infof("NewRelic app not configured, ignoring: %s", err)
@@ -266,6 +268,13 @@ func main() {
 	// Middleware
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
+	if nrApp != nil {
+		relic, err := echorelic.New("isucon10", nrLicenseKey)
+		if err != nil {
+			log.Fatal(err)
+		}
+		e.Use(relic.Transaction)
+	}
 
 	// Initialize
 	e.POST("/initialize", initialize)
