@@ -113,7 +113,7 @@ innodb_flush_method=O_DIRECT
 # innodb_doublewrite = 0
 
 ## SLOW QUERY ##
-slow_query_log = 1
-slow_query_log_file = /var/log/mysql/mysql-slow.log
-long_query_time = 0 # slow query time
-log-queries-not-using-indexes
+#slow_query_log = 1
+#slow_query_log_file = /var/log/mysql/mysql-slow.log
+#long_query_time = 0 # slow query time
+#log-queries-not-using-indexes
