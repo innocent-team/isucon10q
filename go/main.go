@@ -9,9 +9,11 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo"
@@ -246,6 +248,27 @@ func init() {
 }
 
 func main() {
+	done := make(chan interface{})
+	sig := make(chan os.Signal)
+	signal.Notify(sig, os.Interrupt, syscall.SIGTERM, syscall.SIGINT, syscall.SIGKILL)
+	go func() {
+		server()
+		done <- nil
+	}()
+	select {
+	case <-done:
+	case s := <-sig:
+		println("Notified Signal", s.String())
+	}
+	err := chairStock.WriteBack()
+	if err != nil {
+		println("faild", err)
+	}
+	println("After killed Completed")
+	os.Exit(0)
+}
+
+func server() {
 	var err error
 
 	// New Relic

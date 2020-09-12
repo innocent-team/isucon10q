@@ -6,11 +6,13 @@ import (
 	"sync"
 
 	"github.com/labstack/echo"
+	"github.com/pkg/errors"
 )
 
 type ChairStock struct {
 	mutex sync.RWMutex
 	Stock map[int64]int64
+	Write map[int64]bool
 
 	Purged    bool
 	LowestID  map[int64]Chair
@@ -21,13 +23,12 @@ type ChairStock struct {
 var chairStock ChairStock
 
 func InitChairStock(c echo.Context) error {
-	chairStock = ChairStock{Stock: map[int64]int64{}, Purged: true}
+	chairStock = ChairStock{Stock: map[int64]int64{}, Write: map[int64]bool{}, Purged: true}
 	ctx := c.Request().Context()
 	stocks := []struct {
 		ID    int64 `db:"id"`
 		Stock int64 `db:"stock"`
 	}{}
-	println(db, ctx, stocks)
 	err := db.SelectContext(ctx, &stocks, `
 		SELECT id, stock FROM chair
 	`)
@@ -40,6 +41,25 @@ func InitChairStock(c echo.Context) error {
 		chairStock.Stock[stock.ID] = stock.Stock
 	}
 	chairStock.mutex.Unlock()
+	println("[Init Chair] Completed")
+	return nil
+}
+
+func (s *ChairStock) WriteBack() error {
+	if s == nil {
+		println("No chair stock (need initialize)")
+		return nil
+	}
+	for id, stock := range s.Stock {
+		if !s.Write[id] {
+			continue
+		}
+		println("Write Back", id, stock)
+		_, err := db.Exec("UPDATE chair SET stock = ? WHERE id = ?", stock, id)
+		if err != nil {
+			return errors.Wrapf(err, "WriteBack")
+		}
+	}
 	return nil
 }
 
@@ -54,6 +74,7 @@ func (s *ChairStock) Buy(id int64, c echo.Context) error {
 
 	s.mutex.Lock()
 	s.Stock[id]--
+	s.Write[id] = true
 
 	// if the stock < max lowest
 	if s.Stock[id] <= s.MaxLowest {
@@ -61,6 +82,7 @@ func (s *ChairStock) Buy(id int64, c echo.Context) error {
 	}
 	// if low stock goes 0, purge lowest
 	if stock == 1 {
+		s.Write[id] = false
 		_, ok = s.LowestID[id]
 		if ok {
 			s.Purged = true
@@ -68,11 +90,15 @@ func (s *ChairStock) Buy(id int64, c echo.Context) error {
 	}
 	s.mutex.Unlock()
 
-	// Thought DB (cache after)
-	err := doBuyChair(int(id), c)
-	if err != nil {
-		return err
+	// IF 0, through back
+	if stock == 1 {
+		_, err := db.Exec("UPDATE chair SET stock = 0 WHERE id = ?", id)
+		if err != nil {
+			return errors.Wrapf(err, "WriteBack")
+		}
+
 	}
+	// Thought DB (cache after)
 	return nil
 }
 
