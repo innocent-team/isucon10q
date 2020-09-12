@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -255,7 +256,7 @@ func main() {
 		profile.NoShutdownHook).Stop()
 
 	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGKILL)
 	done := make(chan interface{})
 
 	go func() {
