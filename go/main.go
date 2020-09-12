@@ -64,6 +64,7 @@ type ChairListResponse struct {
 //Estate 物件
 type Estate struct {
 	ID          int64   `db:"id" json:"id"`
+	Count       int64   `db:"count" json:"-"`
 	Thumbnail   string  `db:"thumbnail" json:"thumbnail"`
 	Name        string  `db:"name" json:"name"`
 	Description string  `db:"description" json:"description"`
@@ -802,21 +803,19 @@ func searchEstates(c echo.Context) error {
 		return c.NoContent(http.StatusBadRequest)
 	}
 
-	searchQuery := "SELECT * FROM estate WHERE "
-	countQuery := "SELECT COUNT(*) FROM estate WHERE "
 	searchCondition := strings.Join(conditions, " AND ")
 	limitOffset := " ORDER BY popularity DESC, id ASC LIMIT ? OFFSET ?"
 
 	var res EstateSearchResponse
-	err = db.GetContext(ctx, &res.Count, countQuery+searchCondition, params...)
-	if err != nil {
-		c.Logger().Errorf("searchEstates DB execution error : %v", err)
-		return c.NoContent(http.StatusInternalServerError)
-	}
 
 	estates := []Estate{}
+	params = append(params, params...)
 	params = append(params, perPage, page*perPage)
-	err = db.SelectContext(ctx, &estates, searchQuery+searchCondition+limitOffset, params...)
+	entireSearchQuery := `SELECT (
+		SELECT COUNT(*) FROM estate
+		WHERE ` + searchCondition + `
+		) AS count, estate.* FROM estate WHERE ` + searchCondition + limitOffset
+	err = db.SelectContext(ctx, &estates, entireSearchQuery, params...)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return c.JSON(http.StatusOK, EstateSearchResponse{Count: 0, Estates: []Estate{}})
@@ -825,6 +824,7 @@ func searchEstates(c echo.Context) error {
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
+	res.Count = estates[0].Count
 	res.Estates = estates
 
 	return c.JSON(http.StatusOK, res)
