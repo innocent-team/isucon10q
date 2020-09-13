@@ -18,6 +18,7 @@ import (
 	"github.com/labstack/echo"
 	"github.com/labstack/echo/middleware"
 	"github.com/labstack/gommon/log"
+	echonewrelic "github.com/utgwkk/echo-newrelic/v3"
 	"golang.org/x/sync/errgroup"
 
 	_ "github.com/newrelic/go-agent/v3/integrations/nrmysql"
@@ -286,27 +287,28 @@ func main() {
 	// Middleware
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
+	e.Use(echonewrelic.EchoMiddleware(nrApp))
 
 	// Initialize
-	e.POST("/initialize", initialize, echo.WrapMiddleware(MyWrapHandle("/initialize")))
+	e.POST("/initialize", initialize)
 
 	// Chair Handler
-	e.GET("/api/chair/:id", getChairDetail, echo.WrapMiddleware(MyWrapHandle("/api/chair/:id")))
-	e.POST("/api/chair", postChair, echo.WrapMiddleware(MyWrapHandle("/api/chair")))
-	e.GET("/api/chair/search", searchChairs, echo.WrapMiddleware(MyWrapHandle("/api/chair/search")))
-	e.GET("/api/chair/low_priced", getLowPricedChair, echo.WrapMiddleware(MyWrapHandle("/api/chair/low_priced")))
-	e.GET("/api/chair/search/condition", getChairSearchCondition, echo.WrapMiddleware(MyWrapHandle("/api/chair/search/condition")))
-	e.POST("/api/chair/buy/:id", buyChair, echo.WrapMiddleware(MyWrapHandle("/api/chair/buy/:id")))
+	e.GET("/api/chair/:id", getChairDetail)
+	e.POST("/api/chair", postChair)
+	e.GET("/api/chair/search", searchChairs)
+	e.GET("/api/chair/low_priced", getLowPricedChair)
+	e.GET("/api/chair/search/condition", getChairSearchCondition)
+	e.POST("/api/chair/buy/:id", buyChair)
 
 	// Estate Handler
-	e.GET("/api/estate/:id", getEstateDetail, echo.WrapMiddleware(MyWrapHandle("/api/estate/:id")))
-	e.POST("/api/estate", postEstate, echo.WrapMiddleware(MyWrapHandle("/api/estate")))
-	e.GET("/api/estate/search", searchEstates, echo.WrapMiddleware(MyWrapHandle("/api/estate/search")))
-	e.GET("/api/estate/low_priced", getLowPricedEstate, echo.WrapMiddleware(MyWrapHandle("/api/estate/low_priced")))
-	e.POST("/api/estate/req_doc/:id", postEstateRequestDocument, echo.WrapMiddleware(MyWrapHandle("/api/estate/req_doc/:id")))
-	e.POST("/api/estate/nazotte", searchEstateNazotte, echo.WrapMiddleware(MyWrapHandle("/api/estate/nazotte")))
-	e.GET("/api/estate/search/condition", getEstateSearchCondition, echo.WrapMiddleware(MyWrapHandle("/api/estate/search/condition")))
-	e.GET("/api/recommended_estate/:id", searchRecommendedEstateWithChair, echo.WrapMiddleware(MyWrapHandle("/api/recommended_estate/:id")))
+	e.GET("/api/estate/:id", getEstateDetail)
+	e.POST("/api/estate", postEstate)
+	e.GET("/api/estate/search", searchEstates)
+	e.GET("/api/estate/low_priced", getLowPricedEstate)
+	e.POST("/api/estate/req_doc/:id", postEstateRequestDocument)
+	e.POST("/api/estate/nazotte", searchEstateNazotte)
+	e.GET("/api/estate/search/condition", getEstateSearchCondition)
+	e.GET("/api/recommended_estate/:id", searchRecommendedEstateWithChair)
 
 	mySQLConnectionDatas = NewMySQLConnectionEnvs()
 	for _, mySQLConnectionData := range mySQLConnectionDatas {
