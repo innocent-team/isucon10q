@@ -57,6 +57,8 @@ github.com/stretchr/testify v1.6.1 h1:hDPOHmpOpP40lSULcqw7IrRb/u7w6RpDC9399XyoNd
 github.com/stretchr/testify v1.6.1/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
 github.com/utgwkk/echo-newrelic/v3 v3.0.0-20200913104900-433d503ab986 h1:YqIbDawwB1t9iDeUsCU19ODze2LOVa1XGDxpZTcYEsU=
 github.com/utgwkk/echo-newrelic/v3 v3.0.0-20200913104900-433d503ab986/go.mod h1:DMZHTgfbgZo6iD+UFLZINSitMh5wslgl7ZDnACrP/5U=
+github.com/utgwkk/echo-newrelic/v3 v3.0.0-20200913112447-bb4d3b2805a5 h1:qdPfc0bHae3+udoXhSxJStM4xnU9nEuyd4i/1gh/Jm0=
+github.com/utgwkk/echo-newrelic/v3 v3.0.0-20200913112447-bb4d3b2805a5/go.mod h1:oyk3zEaon0HJDdeaMtfMSzQVFOZ5//go8nZWbAhmUl0=
 github.com/valyala/bytebufferpool v1.0.0 h1:GqA5TC/0021Y/b9FG4Oi9Mr3q7XYx6KllzawFIhcdPw=
 github.com/valyala/bytebufferpool v1.0.0/go.mod h1:6bBcMArwyJ5K/AmCkWv1jt77kVWyCJ6HpOuEn7z0Csc=
 github.com/valyala/fasttemplate v1.0.1 h1:tY9CJiPnMXf1ERmG2EyK7gNUd+c6RKGD0IfU8WdUSz8=
