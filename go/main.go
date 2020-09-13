@@ -288,6 +288,7 @@ func main() {
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 	e.Use(echonewrelic.EchoMiddleware(nrApp))
+	e.Use(echonewrelic.AddTraceIDToHeaderMiddleware())
 
 	// Initialize
 	e.POST("/initialize", initialize)
