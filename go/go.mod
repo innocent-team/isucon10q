@@ -12,7 +12,7 @@ require (
 	github.com/newrelic/go-agent/v3 v3.9.0
 	github.com/newrelic/go-agent/v3/integrations/nrmysql v1.2.0
 	github.com/stretchr/testify v1.6.1 // indirect
-	github.com/utgwkk/echo-newrelic/v3 v3.0.0-20200913112447-bb4d3b2805a5
+	github.com/utgwkk/echo-newrelic/v3 v3.0.0-20200913122919-e535c1738d44
 	github.com/valyala/fasttemplate v1.1.0 // indirect
 	golang.org/x/net v0.0.0-20200520182314-0ba52f642ac2 // indirect
 	golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208
