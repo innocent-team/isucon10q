@@ -592,7 +592,7 @@ func searchChairs(c echo.Context) error {
 	searchQuery := "SELECT * FROM chair WHERE "
 	countQuery := "SELECT COUNT(*) FROM chair WHERE "
 	searchCondition := strings.Join(conditions, " AND ")
-	limitOffset := " ORDER BY popularity DESC, id ASC LIMIT ? OFFSET ?"
+	limitOffset := " ORDER BY popularity_desc ASC, id ASC LIMIT ? OFFSET ?"
 
 	var res ChairSearchResponse
 	err = db.GetContext(ctx, &res.Count, countQuery+searchCondition, params...)
@@ -906,7 +906,7 @@ func searchEstates(c echo.Context) error {
 	searchQuery := "SELECT * FROM estate WHERE "
 	countQuery := "SELECT COUNT(*) FROM estate WHERE "
 	searchCondition := strings.Join(conditions, " AND ")
-	limitOffset := " ORDER BY popularity DESC, id ASC LIMIT ? OFFSET ?"
+	limitOffset := " ORDER BY popularity_desc ASC, id ASC LIMIT ? OFFSET ?"
 
 	var res EstateSearchResponse
 	err = db.GetContext(ctx, &res.Count, countQuery+searchCondition, params...)
@@ -980,7 +980,7 @@ func searchRecommendedEstateWithChair(c echo.Context) error {
 		WHERE 
 			(door_width >= ? AND door_height >= ?)
 			OR (door_width >= ? AND door_height >= ?)
-		ORDER BY popularity DESC, id ASC LIMIT ?
+		ORDER BY popularity_desc ASC, id ASC LIMIT ?
 	`
 	err = db.SelectContext(ctx, &estates, query, l1, l2, l2, l1, Limit)
 	if err != nil {
