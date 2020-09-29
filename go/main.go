@@ -20,6 +20,7 @@ import (
 	"github.com/labstack/gommon/log"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/newrelic/go-agent/v3/integrations/nrecho-v3"
 	_ "github.com/newrelic/go-agent/v3/integrations/nrmysql"
 	"github.com/newrelic/go-agent/v3/newrelic"
 )
@@ -286,6 +287,7 @@ func main() {
 	// Middleware
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
+	e.Use(nrecho.Middleware(nrApp))
 
 	// Initialize
 	e.POST("/initialize", initialize, echo.WrapMiddleware(MyWrapHandle("/initialize")))
