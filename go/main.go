@@ -18,6 +18,7 @@ import (
 	"github.com/labstack/echo"
 	"github.com/labstack/echo/middleware"
 	"github.com/labstack/gommon/log"
+	"github.com/sevenNt/echo-pprof"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/newrelic/go-agent/v3/integrations/nrecho-v3"
@@ -289,6 +290,7 @@ func main() {
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 	e.Use(nrecho.Middleware(nrApp))
+	echopprof.Wrap(e)
 
 	// Initialize
 	e.POST("/initialize", initialize, echo.WrapMiddleware(MyWrapHandle("/initialize")))

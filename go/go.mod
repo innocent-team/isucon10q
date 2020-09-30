@@ -15,6 +15,7 @@ require (
 	github.com/newrelic/go-agent/v3 v3.8.1
 	github.com/newrelic/go-agent/v3/integrations/nrecho-v3 v1.0.0
 	github.com/newrelic/go-agent/v3/integrations/nrmysql v1.2.0
+	github.com/sevenNt/echo-pprof v0.1.0
 	github.com/stretchr/testify v1.6.1
 	github.com/valyala/fasttemplate v1.1.0 // indirect
 	golang.org/x/crypto v0.0.0-20200820211705-5c72a883971a // indirect
