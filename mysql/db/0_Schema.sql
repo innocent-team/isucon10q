@@ -17,7 +17,8 @@ CREATE TABLE isuumo.estate
     door_height INTEGER             NOT NULL,
     door_width  INTEGER             NOT NULL,
     features    VARCHAR(64) CHARACTER SET utf8mb4 NOT NULL,
-    popularity  INTEGER             NOT NULL
+    popularity  INTEGER             NOT NULL,
+    popularity_desc INTEGER AS (-popularity) NOT NULL
 );
 
 CREATE TABLE isuumo.chair
@@ -34,6 +35,7 @@ CREATE TABLE isuumo.chair
     features    VARCHAR(64) CHARACTER SET utf8mb4 NOT NULL,
     kind        VARCHAR(64) CHARACTER SET utf8mb4 NOT NULL,
     popularity  INTEGER         NOT NULL,
+    popularity_desc INTEGER AS (-popularity) NOT NULL,
     stock       INTEGER         NOT NULL
 );
 
@@ -46,12 +48,14 @@ CREATE INDEX chair_kind_stock ON isuumo.chair (kind, stock);
 CREATE INDEX chair_color_stock ON isuumo.chair (color, stock);
 CREATE INDEX chair_features_stock ON isuumo.chair (features, stock);
 CREATE INDEX chair_price_id_stock ON isuumo.chair (price, id, stock);
+CREATE INDEX chair_popularity_desc_id ON isuumo.chair (popularity_desc, id);
 
 CREATE INDEX estate_door_height ON isuumo.estate (door_height);
 CREATE INDEX estate_door_width ON isuumo.estate (door_width);
 CREATE INDEX estate_rent ON isuumo.estate (rent);
 CREATE INDEX estate_features ON isuumo.estate (features);
 CREATE INDEX estate_rent_id ON isuumo.estate (rent, id);
+CREATE INDEX estate_popularity_desc_id ON isuumo.estate (popularity_desc, id);
 
 CREATE INDEX estate_latitude_longitude ON isuumo.estate(latitude, longitude);
 CREATE INDEX estate_door_height_door_width ON isuumo.estate (door_height, door_width);
